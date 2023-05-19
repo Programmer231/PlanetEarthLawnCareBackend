@@ -14,7 +14,7 @@ import { RegularUser } from "../entities/RegularUser";
 import { MyContext } from "../types";
 // @ts-ignore
 import { ObjectId } from "mongodb";
-import { FindOptionsWhere } from "typeorm";
+import { FindOptionsWhere, MongoError } from "typeorm";
 import { isAuth } from "../middleware/isAuth";
 
 @ObjectType()
@@ -28,7 +28,7 @@ class RegularUserResponse {
 
 @ObjectType()
 class CreateRegularUserResponse {
-  @Field(() => Boolean)
+  @Field(() => Boolean, { nullable: true })
   user?: Boolean;
 
   @Field(() => [SecondErrorResponse], { nullable: true })
@@ -74,12 +74,29 @@ export class RegularUserResolver {
     newUser.address = address;
     newUser.phoneNumber = phoneNumber;
 
-    console.log("new User is:", newUser);
-
     try {
       await datasource.manager.save(newUser);
-    } catch (err: any) {
-      console.log(err);
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return {
+          errors: [
+            {
+              field: "Duplicate Address or Phone Number",
+              message:
+                "Someone else in this database already has this address or phone number, please make a new estimate under their name.",
+            },
+          ],
+        };
+      } else {
+        return {
+          errors: [
+            {
+              field: "Unkown Error",
+              message: "An Unkown Error Occurred",
+            },
+          ],
+        };
+      }
     }
 
     return { user: true };
@@ -99,20 +116,16 @@ export class RegularUserResolver {
       };
     }
 
-    const loggedInUser = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
-
-    if (!loggedInUser) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "not authorized to perform this action",
-          },
-        ],
-      };
-    }
+    // if (!req.session.admin) {
+    //   return {
+    //     errors: [
+    //       {
+    //         field: "authorization",
+    //         message: "User not authorized",
+    //       },
+    //     ],
+    //   };
+    // }
     return { users: await datasource.manager.find(RegularUser) };
   }
 }

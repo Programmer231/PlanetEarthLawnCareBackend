@@ -21,6 +21,8 @@ require("dotenv").config();
 declare module "express-session" {
   interface Session {
     userId?: string;
+    admin?: boolean;
+    employee?: boolean;
   }
 }
 

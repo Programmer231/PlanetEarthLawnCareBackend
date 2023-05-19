@@ -6,6 +6,7 @@ import {
   ObjectType,
   Query,
   Resolver,
+  UseMiddleware,
 } from "type-graphql";
 import { RegularUser } from "../entities/RegularUser";
 import { MyContext } from "../types";
@@ -19,6 +20,16 @@ import { datasource } from "..";
 import { FindOptionsWhere, ObjectID } from "typeorm";
 // @ts-ignore
 import { ObjectId } from "mongodb";
+import { isAuth } from "../middleware/isAuth";
+
+@ObjectType()
+class DeleteUser {
+  @Field(() => [FieldError], { nullable: true })
+  errors?: FieldError[];
+
+  @Field(() => Boolean, { nullable: true })
+  success?: Boolean;
+}
 
 @ObjectType()
 class FieldError {
@@ -40,7 +51,6 @@ class UserResponse {
 export class UserResolver {
   @Query(() => AdminUser, { nullable: true })
   async me(@Ctx() { req }: MyContext): Promise<AdminUser | null> {
-    console.log(req.session);
     if (!req.session.userId) {
       return null;
     }
@@ -135,6 +145,7 @@ export class UserResolver {
     //keep them logged in
 
     req.session.userId = user._id.toString();
+    req.session.admin = false;
 
     return { user: user };
   }
@@ -205,6 +216,8 @@ export class UserResolver {
 
     req.session.userId = user._id.toString();
 
+    req.session.admin = false;
+
     return { user: user };
   }
 
@@ -221,5 +234,26 @@ export class UserResolver {
         resolve(true);
       });
     });
+  }
+
+  @Mutation(() => DeleteUser)
+  @UseMiddleware(isAuth)
+  async deleteUser(
+    @Ctx() { req, res }: MyContext,
+    @Arg("id", () => String) id: string
+  ): Promise<DeleteUser> {
+    if (!req.session.userId) {
+      return {
+        errors: [
+          {
+            field: "authentication",
+            message: "User not authenticated",
+          },
+        ],
+      };
+    }
+    const user = await datasource.manager.delete(RegularUser, new ObjectId(id));
+
+    return { success: true };
   }
 }

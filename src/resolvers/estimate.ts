@@ -174,7 +174,6 @@ export class EstimateResolver {
     }
 
     const userEstimate = new Estimates();
-    console.log("still runnning...");
     userEstimate.userId = new UserID();
     userEstimate.userId._id = new ObjectId(estimates.userId);
     userEstimate.jobs = [];
@@ -273,12 +272,50 @@ export class EstimateResolver {
 
     const realDate = new Date(date);
 
+    console.log(realDate);
+
+    const startofMonth = new Date(
+      realDate.getFullYear(),
+      realDate.getMonth(),
+      1
+    );
+    const startofNextMonth = new Date(
+      realDate.getFullYear(),
+      realDate.getMonth() + 1,
+      1
+    );
+
     const estimates = await datasource.manager.findBy(Estimates, {
       "jobs._id": { $eq: searchJob?._id },
+      createdAt: {
+        $gte: startofMonth,
+        $lt: startofNextMonth,
+      },
       accepted: true,
     } as any);
 
     return { estimates: estimates };
+  }
+
+  @Query(() => RetrieveEstimates)
+  @UseMiddleware(isAuth)
+  async getAllEstimatesQuery(
+    @Ctx() { req }: MyContext
+  ): Promise<RetrieveEstimates> {
+    try {
+      const estimates = await datasource.manager.findBy(Estimates, {} as any);
+
+      return { estimates: estimates };
+    } catch {
+      return {
+        errors: [
+          {
+            field: "Estimate Retrieval Failed",
+            message: "Database Failed to Load Estimates",
+          },
+        ],
+      };
+    }
   }
 
   @Mutation(() => RetrieveEstimates)
@@ -287,28 +324,25 @@ export class EstimateResolver {
     @Arg("date", () => String) date: string,
     @Ctx() { req }: MyContext
   ) {
-    const adminUser = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
-
-    if (!adminUser) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "not authorized",
-          },
-        ],
-      };
-    }
-
     const realDate = new Date(date);
 
-    console.log(new Date(realDate.setMonth(realDate.getMonth())));
-    console.log(new Date(realDate.setMonth(realDate.getMonth() + 1)));
+    const startofMonth = new Date(
+      realDate.getFullYear(),
+      realDate.getMonth(),
+      1
+    );
+    const startofNextMonth = new Date(
+      realDate.getFullYear(),
+      realDate.getMonth() + 1,
+      1
+    );
 
     const estimates = await datasource.manager.findBy(Estimates, {
       accepted: true,
+      updatedAt: {
+        $gte: startofMonth,
+        $lt: startofNextMonth,
+      },
     } as any);
 
     return { estimates: estimates };
@@ -338,10 +372,28 @@ export class EstimateResolver {
 
     const realDate = new Date(date);
 
+    const startofMonth = new Date(
+      realDate.getFullYear(),
+      realDate.getMonth(),
+      1
+    );
+    const startofNextMonth = new Date(
+      realDate.getFullYear(),
+      realDate.getMonth() + 1,
+      1
+    );
+
     const estimates = await datasource.manager.findBy(Estimates, {
+      updatedAt: {
+        $gte: startofMonth,
+        $lt: startofNextMonth,
+      },
       accepted: true,
+
       "userId._id": new ObjectId(inputUserId),
     } as any);
+
+    console.log(estimates);
 
     return { estimates: estimates };
   }
@@ -379,8 +431,6 @@ export class EstimateResolver {
         ],
       };
     }
-
-    console.log(specificEstimate);
 
     return { estimates: specificEstimate };
   }
