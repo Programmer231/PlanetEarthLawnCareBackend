@@ -13,7 +13,6 @@ import { UserResolver } from "./resolvers/user";
 import { Estimates } from "./entities/Estimates";
 import { AdminUser } from "./entities/AdminUser";
 import { RegularUser } from "./entities/RegularUser";
-import { Job } from "./entities/Job";
 import { EstimateResolver } from "./resolvers/estimate";
 import { AvailableJobs } from "./entities/AvailableJobs";
 import { RegularUserResolver } from "./resolvers/regularUser";
@@ -32,8 +31,8 @@ export const datasource = new DataSource({
   username: process.env.USERNAME,
   password: process.env.PASSWORD,
   logging: true,
-  synchronize: true,
-  migrations: [path.join(__dirname, "./migrations/*")],
+  //synchronize: true,
+  //migrations: [path.join(__dirname, "./migrations/*")],
   entities: [AdminUser, RegularUser, AvailableJobs, Estimates],
   useUnifiedTopology: true,
   useNewUrlParser: true,
@@ -44,8 +43,6 @@ const main = async () => {
   await datasource.initialize();
 
   await datasource.runMigrations();
-
-  //await Post.delete({});
 
   const mongoDbStore = mongoSession(session);
 
@@ -58,12 +55,10 @@ const main = async () => {
 
   app.use(
     cors({
-      origin: "http://localhost:3000",
+      origin: process.env.CORS_ORIGIN,
       credentials: true,
     })
   );
-
-  app.set("trust proxy", !_prod_);
 
   app.use(
     session({
@@ -71,12 +66,13 @@ const main = async () => {
       store: store,
       cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 30, //30 days
-        secure: false,
+        secure: _prod_,
+        domain: _prod_ ? ".planetearthlawncare.org" : undefined,
         httpOnly: true,
       },
       resave: false,
       saveUninitialized: false,
-      secret: "jwoepirnpafhfajkhiuwe",
+      secret: process.env.AUTHENTICATION_KEY as string,
     })
   );
 
@@ -87,6 +83,7 @@ const main = async () => {
     }),
     context: ({ req, res }: MyContext) => ({ req, res }),
     csrfPrevention: true,
+    cache: "bounded",
   });
 
   await apolloServer.start();

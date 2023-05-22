@@ -8,16 +8,14 @@ import {
   Resolver,
   UseMiddleware,
 } from "type-graphql";
-import { RegularUser } from "../entities/RegularUser";
 import { MyContext } from "../types";
 import argon2, { hash } from "argon2";
 import { AdminUser } from "../entities/AdminUser";
 import { validateRegister } from "../utils/register";
-import { COOKIE_NAME } from "../constants";
+import { COOKIE_NAME, _prod_ } from "../constants";
 import { v4 } from "uuid";
 import { sendEmail } from "../utils/sendEmail";
 import { datasource } from "..";
-import { FindOptionsWhere, ObjectID } from "typeorm";
 // @ts-ignore
 import { ObjectId } from "mongodb";
 import { isAuth } from "../middleware/isAuth";
@@ -66,6 +64,7 @@ export class UserResolver {
   }
 
   @Mutation(() => UserResponse)
+  @UseMiddleware(isAuth)
   async register(
     @Arg("email", () => String) email: string,
     @Arg("username", () => String) username: string,
@@ -168,7 +167,9 @@ export class UserResolver {
 
     await sendEmail(
       user.email,
-      `<a href="http://localhost:3000/create-password/${token}">Reset Password</a>`
+      `<a href="http://${
+        _prod_ ? ".planetearthlawncare.org" : "localhost:3000"
+      }/create-password/${token}">Reset Password</a>`
     ).catch((err) => console.log(err));
 
     return true;
@@ -234,26 +235,5 @@ export class UserResolver {
         resolve(true);
       });
     });
-  }
-
-  @Mutation(() => DeleteUser)
-  @UseMiddleware(isAuth)
-  async deleteUser(
-    @Ctx() { req, res }: MyContext,
-    @Arg("id", () => String) id: string
-  ): Promise<DeleteUser> {
-    if (!req.session.userId) {
-      return {
-        errors: [
-          {
-            field: "authentication",
-            message: "User not authenticated",
-          },
-        ],
-      };
-    }
-    const user = await datasource.manager.delete(RegularUser, new ObjectId(id));
-
-    return { success: true };
   }
 }

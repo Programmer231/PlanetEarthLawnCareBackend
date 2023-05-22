@@ -34,6 +34,15 @@ class EstimateObjects {
   _id!: string;
 }
 
+@ObjectType()
+class Deletion {
+  @Field(() => [ErrorResponse], { nullable: true })
+  errors?: ErrorResponse[];
+
+  @Field(() => Boolean, { nullable: true })
+  success?: Boolean;
+}
+
 @InputType()
 class EstimateInput {
   @Field(() => [EstimateObjects])
@@ -292,6 +301,9 @@ export class EstimateResolver {
         $lt: startofNextMonth,
       },
       accepted: true,
+      order: {
+        updatedAt: "DESC",
+      },
     } as any);
 
     return { estimates: estimates };
@@ -303,7 +315,11 @@ export class EstimateResolver {
     @Ctx() { req }: MyContext
   ): Promise<RetrieveEstimates> {
     try {
-      const estimates = await datasource.manager.findBy(Estimates, {} as any);
+      const estimates = await datasource.manager.findBy(Estimates, {
+        order: {
+          updatedAt: "DESC",
+        },
+      } as any);
 
       return { estimates: estimates };
     } catch {
@@ -342,6 +358,9 @@ export class EstimateResolver {
       updatedAt: {
         $gte: startofMonth,
         $lt: startofNextMonth,
+      },
+      order: {
+        updatedAt: "DESC",
       },
     } as any);
 
@@ -391,6 +410,9 @@ export class EstimateResolver {
       accepted: true,
 
       "userId._id": new ObjectId(inputUserId),
+      order: {
+        updatedAt: "DESC",
+      },
     } as any);
 
     console.log(estimates);
@@ -436,26 +458,12 @@ export class EstimateResolver {
   }
 
   @Mutation(() => EstimateResponse)
+  @UseMiddleware(isAuth)
   async updateSpecificEstimate(
     @Arg("estimates", () => EstimateInput) estimates: EstimateInput,
     @Arg("estimateId", () => String) estimateId: string,
     @Ctx() { req }: MyContext
   ): Promise<EstimateResponse> {
-    const adminUser = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
-
-    if (!adminUser) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "not authorized",
-          },
-        ],
-      };
-    }
-
     const estimate = await datasource.manager.findOne(Estimates, {
       where: { _id: new ObjectId(estimateId) } as any,
     });
@@ -537,5 +545,53 @@ export class EstimateResolver {
       throw new Error(err);
     }
     return { estimateSubmitted: true };
+  }
+
+  @Mutation(() => Deletion)
+  @UseMiddleware(isAuth)
+  async deleteEstimate(
+    @Ctx() { req, res }: MyContext,
+    @Arg("id", () => String) id: string
+  ): Promise<Deletion> {
+    if (!req.session.userId) {
+      return {
+        errors: [
+          {
+            field: "authentication",
+            message: "User not authenticated",
+          },
+        ],
+      };
+    }
+    const estimate = await datasource.manager.delete(
+      Estimates,
+      new ObjectId(id)
+    );
+
+    return { success: true };
+  }
+
+  @Mutation(() => Deletion)
+  @UseMiddleware(isAuth)
+  async deleteJob(
+    @Ctx() { req, res }: MyContext,
+    @Arg("id", () => String) id: string
+  ): Promise<Deletion> {
+    if (!req.session.userId) {
+      return {
+        errors: [
+          {
+            field: "authentication",
+            message: "User not authenticated",
+          },
+        ],
+      };
+    }
+    const estimate = await datasource.manager.delete(
+      AvailableJobs,
+      new ObjectId(id)
+    );
+
+    return { success: true };
   }
 }

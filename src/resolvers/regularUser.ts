@@ -14,7 +14,6 @@ import { RegularUser } from "../entities/RegularUser";
 import { MyContext } from "../types";
 // @ts-ignore
 import { ObjectId } from "mongodb";
-import { FindOptionsWhere, MongoError } from "typeorm";
 import { isAuth } from "../middleware/isAuth";
 
 @ObjectType()
@@ -33,6 +32,15 @@ class CreateRegularUserResponse {
 
   @Field(() => [SecondErrorResponse], { nullable: true })
   errors?: SecondErrorResponse[];
+}
+
+@ObjectType()
+class DeleteUser {
+  @Field(() => [SecondErrorResponse], { nullable: true })
+  errors?: SecondErrorResponse[];
+
+  @Field(() => Boolean, { nullable: true })
+  success?: Boolean;
 }
 
 @ObjectType()
@@ -127,5 +135,26 @@ export class RegularUserResolver {
     //   };
     // }
     return { users: await datasource.manager.find(RegularUser) };
+  }
+
+  @Mutation(() => DeleteUser)
+  @UseMiddleware(isAuth)
+  async deleteUser(
+    @Ctx() { req, res }: MyContext,
+    @Arg("id", () => String) id: string
+  ): Promise<DeleteUser> {
+    if (!req.session.userId) {
+      return {
+        errors: [
+          {
+            field: "authentication",
+            message: "User not authenticated",
+          },
+        ],
+      };
+    }
+    const user = await datasource.manager.delete(RegularUser, new ObjectId(id));
+
+    return { success: true };
   }
 }
