@@ -1,7 +1,7 @@
 export const validateRegister = (
   email: String,
-  password: String,
-  username: String
+  username: String,
+  password: String
 ) => {
   if (!email.includes("@")) {
     return [{ field: "email", message: "invalid email" }];
@@ -20,11 +20,11 @@ export const validateRegister = (
     ];
   }
 
-  if (password.length <= 3) {
+  if (password.length <= 8) {
     return [
       {
         field: "password",
-        message: "password not long enough",
+        message: "password not long enough. It must be at least 8 characters.",
       },
     ];
   }

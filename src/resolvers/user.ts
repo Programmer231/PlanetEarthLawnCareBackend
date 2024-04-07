@@ -9,16 +9,27 @@ import {
   UseMiddleware,
 } from "type-graphql";
 import { MyContext } from "../types";
-import argon2, { hash } from "argon2";
+import argon2 from "argon2";
 import { AdminUser } from "../entities/AdminUser";
 import { validateRegister } from "../utils/register";
-import { COOKIE_NAME, _prod_ } from "../constants";
+import { _prod_ } from "../constants";
 import { v4 } from "uuid";
 import { sendEmail } from "../utils/sendEmail";
 import { datasource } from "..";
 // @ts-ignore
 import { ObjectId } from "mongodb";
-import { isAuth } from "../middleware/isAuth";
+import { isCustomer } from "../middleware/isCustomer";
+import { isAdmin } from "../middleware/isAdmin";
+import { RegularUser } from "../entities/RegularUser";
+
+@ObjectType()
+class RegularUserResponse {
+  @Field(() => [RegularUser], { nullable: true })
+  users?: RegularUser[];
+
+  @Field(() => [FieldError], { nullable: true })
+  errors?: FieldError[];
+}
 
 @ObjectType()
 class DeleteUser {
@@ -41,21 +52,25 @@ class FieldError {
 class UserResponse {
   @Field(() => [FieldError], { nullable: true })
   errors?: FieldError[];
-  @Field(() => AdminUser, { nullable: true })
-  user?: AdminUser;
+  @Field(() => Boolean, { nullable: true })
+  user?: Boolean;
 }
 
 @Resolver()
 export class UserResolver {
   @Query(() => AdminUser, { nullable: true })
   async me(@Ctx() { req }: MyContext): Promise<AdminUser | null> {
-    if (!req.session.userId) {
+    if (!req.session.userId || !req.session.admin) {
       return null;
     }
 
     const user = await datasource.manager.findOneBy(AdminUser, {
       _id: new ObjectId(req.session.userId),
     } as any);
+
+    if (!user) {
+      return null;
+    }
     if (user) {
       user._id = user?._id.toString();
     }
@@ -64,7 +79,7 @@ export class UserResolver {
   }
 
   @Mutation(() => UserResponse)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async register(
     @Arg("email", () => String) email: string,
     @Arg("username", () => String) username: string,
@@ -87,7 +102,7 @@ export class UserResolver {
       user.email = email;
       await datasource.manager.save(user);
       req.session.userId = user._id.toString();
-      return { user: user };
+      return { user: true };
     } catch (err: any) {
       if (err.detail.includes("already exists")) {
         return {
@@ -144,9 +159,11 @@ export class UserResolver {
     //keep them logged in
 
     req.session.userId = user._id.toString();
-    req.session.admin = false;
+    req.session.admin = true;
+    req.session.customer = false;
+    req.session.employee = false;
 
-    return { user: user };
+    return { user: true };
   }
 
   @Mutation(() => Boolean)
@@ -213,27 +230,75 @@ export class UserResolver {
     user.password = password;
     user.forgotpassword = null;
 
-    await datasource.manager.save(AdminUser);
+    await datasource.manager.save(user);
 
     req.session.userId = user._id.toString();
 
     req.session.admin = false;
 
-    return { user: user };
+    return { user: true };
   }
 
   @Mutation(() => Boolean)
+  @UseMiddleware(isAdmin)
   async logout(@Ctx() { req, res }: MyContext): Promise<Boolean> {
     return new Promise((resolve) => {
       req.session.destroy((err) => {
-        res.clearCookie(COOKIE_NAME as string);
+        res.clearCookie(process.env.COOKIENAME as string);
         if (err) {
           console.log(err);
           resolve(false);
-          return;
         }
         resolve(true);
       });
     });
+  }
+
+  @Query(() => RegularUserResponse)
+  @UseMiddleware(isAdmin)
+  async getUsers(@Ctx() { req }: MyContext): Promise<RegularUserResponse> {
+    if (!req.session.userId) {
+      return {
+        errors: [
+          {
+            field: "authentication",
+            message: "User not authenticated",
+          },
+        ],
+      };
+    }
+
+    // if (!req.session.admin) {
+    //   return {
+    //     errors: [
+    //       {
+    //         field: "authorization",
+    //         message: "User not authorized",
+    //       },
+    //     ],
+    //   };
+    // }
+    return { users: await datasource.manager.find(RegularUser) };
+  }
+
+  @Mutation(() => DeleteUser)
+  @UseMiddleware(isAdmin)
+  async deleteUser(
+    @Ctx() { req, res }: MyContext,
+    @Arg("id", () => String) id: string
+  ): Promise<DeleteUser> {
+    if (!req.session.userId) {
+      return {
+        errors: [
+          {
+            field: "authentication",
+            message: "User not authenticated",
+          },
+        ],
+      };
+    }
+    const user = await datasource.manager.delete(RegularUser, new ObjectId(id));
+
+    return { success: true };
   }
 }

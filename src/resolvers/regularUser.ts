@@ -9,38 +9,24 @@ import {
   UseMiddleware,
 } from "type-graphql";
 import { datasource } from "..";
-import { AdminUser } from "../entities/AdminUser";
 import { RegularUser } from "../entities/RegularUser";
 import { MyContext } from "../types";
 // @ts-ignore
 import { ObjectId } from "mongodb";
-import { isAuth } from "../middleware/isAuth";
+import { isCustomer } from "../middleware/isCustomer";
+import argon2 from "argon2";
+import { validateRegister } from "../utils/register";
+import { sendEmail } from "../utils/sendEmail";
+import { _prod_ } from "../constants";
+import { v4 } from "uuid";
 
 @ObjectType()
-class RegularUserResponse {
-  @Field(() => [RegularUser], { nullable: true })
-  users?: RegularUser[];
-
-  @Field(() => [SecondErrorResponse], { nullable: true })
-  errors?: SecondErrorResponse[];
-}
-
-@ObjectType()
-class CreateRegularUserResponse {
+class regularUserStatusResponse {
   @Field(() => Boolean, { nullable: true })
   user?: Boolean;
 
   @Field(() => [SecondErrorResponse], { nullable: true })
   errors?: SecondErrorResponse[];
-}
-
-@ObjectType()
-class DeleteUser {
-  @Field(() => [SecondErrorResponse], { nullable: true })
-  errors?: SecondErrorResponse[];
-
-  @Field(() => Boolean, { nullable: true })
-  success?: Boolean;
 }
 
 @ObjectType()
@@ -54,27 +40,19 @@ class SecondErrorResponse {
 
 @Resolver()
 export class RegularUserResolver {
-  @Mutation(() => CreateRegularUserResponse)
-  @UseMiddleware(isAuth)
+  @Mutation(() => regularUserStatusResponse)
   async createUser(
     @Arg("name", () => String) name: string,
     @Arg("phoneNumber", () => String) phoneNumber: string,
     @Arg("address", () => String) address: string,
+    @Arg("password", () => String) password: string,
+    @Arg("email", () => String) email: string,
     @Ctx() { req }: MyContext
-  ): Promise<CreateRegularUserResponse> {
-    const loggedInUser = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
+  ): Promise<regularUserStatusResponse> {
+    const response = validateRegister(email, name, password);
 
-    if (!loggedInUser) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "not authorized to perform this action",
-          },
-        ],
-      };
+    if (response) {
+      return { errors: response };
     }
     const newUser = new RegularUser();
 
@@ -82,16 +60,26 @@ export class RegularUserResolver {
     newUser.address = address;
     newUser.phoneNumber = phoneNumber;
 
+    const hashedPassword = await argon2.hash(password);
+
+    newUser.password = hashedPassword;
+    newUser.email = email;
+
     try {
-      await datasource.manager.save(newUser);
+      let user = await datasource.manager.save(newUser);
+
+      req.session.userId = user._id.toString();
+      req.session.admin = false;
+      req.session.customer = true;
+      req.session.employee = false;
     } catch (error: any) {
       if (error?.code === 11000) {
         return {
           errors: [
             {
-              field: "Duplicate Address or Phone Number",
+              field: "Duplicate Address or Phone Number or Email",
               message:
-                "Someone else in this database already has this address or phone number, please make a new estimate under their name.",
+                "Someone else in this database already has this address, phone number, or email. Please make a new estimate under their name.",
             },
           ],
         };
@@ -110,51 +98,153 @@ export class RegularUserResolver {
     return { user: true };
   }
 
-  @Query(() => RegularUserResponse)
-  @UseMiddleware(isAuth)
-  async getUsers(@Ctx() { req }: MyContext): Promise<RegularUserResponse> {
-    if (!req.session.userId) {
+  @Mutation(() => regularUserStatusResponse)
+  async loginRegularUser(
+    @Ctx() { req, res }: MyContext,
+    @Arg("email", () => String) email: string,
+    @Arg("password", () => String) password: string
+  ): Promise<regularUserStatusResponse> {
+    const user = await datasource.manager.findOneBy(RegularUser, {
+      email: email,
+    });
+    if (!user) {
       return {
         errors: [
           {
-            field: "authentication",
-            message: "User not authenticated",
+            field: "email",
+            message: "email doesn't exist",
+          },
+        ],
+      };
+    }
+    const valid = await argon2.verify(user.password, password);
+
+    if (!valid) {
+      return {
+        errors: [
+          {
+            field: "password",
+            message: "incorrect password",
           },
         ],
       };
     }
 
-    // if (!req.session.admin) {
-    //   return {
-    //     errors: [
-    //       {
-    //         field: "authorization",
-    //         message: "User not authorized",
-    //       },
-    //     ],
-    //   };
-    // }
-    return { users: await datasource.manager.find(RegularUser) };
+    //store user id session
+    //this will set a cookie on the user
+    //keep them logged in
+
+    req.session.userId = user._id.toString();
+    req.session.admin = false;
+    req.session.customer = true;
+    req.session.employee = false;
+
+    return { user: true };
   }
 
-  @Mutation(() => DeleteUser)
-  @UseMiddleware(isAuth)
-  async deleteUser(
-    @Ctx() { req, res }: MyContext,
-    @Arg("id", () => String) id: string
-  ): Promise<DeleteUser> {
-    if (!req.session.userId) {
+  @Mutation(() => Boolean)
+  @UseMiddleware(isCustomer)
+  async logout(@Ctx() { req, res }: MyContext): Promise<Boolean> {
+    return new Promise((resolve) => {
+      req.session.destroy((err) => {
+        res.clearCookie(process.env.COOKIENAME as string);
+        if (err) {
+          console.log(err);
+          resolve(false);
+        }
+        resolve(true);
+      });
+    });
+  }
+
+  @Query(() => RegularUser, { nullable: true })
+  async getUser(@Ctx() { req }: MyContext): Promise<RegularUser | null> {
+    if (!req.session.userId || !req.session.customer) {
+      return null;
+    }
+
+    const user = await datasource.manager.findOneBy(RegularUser, {
+      _id: new ObjectId(req.session.userId),
+    } as any);
+    if (user) {
+      user._id = user?._id.toString();
+    }
+
+    return user;
+  }
+
+  @Mutation(() => Boolean)
+  async sendUserEmail(
+    @Arg("email", () => String) email: string
+  ): Promise<Boolean> {
+    const user = await datasource.manager.findOneBy(RegularUser, {
+      email: email,
+    });
+
+    if (!user) {
+      return true;
+    }
+
+    const token = v4().toString();
+
+    user.forgotpassword = token;
+
+    await datasource.manager.save(user);
+
+    await sendEmail(
+      user.email,
+      `<a href="http://${
+        _prod_ ? ".planetearthlawncare.org" : "localhost:3000"
+      }/create-password/${token}">Reset Password</a>`
+    );
+
+    return true;
+  }
+
+  @Mutation(() => regularUserStatusResponse)
+  async forgotUserPassword(
+    @Arg("newPassword", () => String) newPassword: string,
+    @Arg("token", () => String) token: string,
+    @Ctx() { req }: MyContext
+  ): Promise<regularUserStatusResponse> {
+    if (newPassword.length <= 2) {
       return {
         errors: [
           {
-            field: "authentication",
-            message: "User not authenticated",
+            field: "newPassword",
+            message: "length must be greater than 2",
           },
         ],
       };
     }
-    const user = await datasource.manager.delete(RegularUser, new ObjectId(id));
 
-    return { success: true };
+    const user = await datasource.manager.findOneBy(RegularUser, {
+      forgotpassword: token,
+    });
+
+    if (!user) {
+      return {
+        errors: [
+          {
+            field: "User",
+            message:
+              "User not found. Please make sure you click the exact link you were sent in your email and try again.",
+          },
+        ],
+      };
+    }
+
+    const password = await argon2.hash(newPassword);
+
+    user.password = password;
+    user.forgotpassword = null;
+
+    await datasource.manager.save(user);
+
+    req.session.userId = user._id.toString();
+
+    req.session.admin = false;
+
+    return { user: true };
   }
 }

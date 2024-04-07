@@ -15,4 +15,8 @@ export class AvailableJobs {
   @Field(() => String)
   @Column({ unique: true })
   name!: string;
+
+  @Field(() => [String])
+  @Column()
+  images?: string[];
 }

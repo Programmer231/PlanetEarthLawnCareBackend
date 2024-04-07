@@ -19,8 +19,11 @@ import { MyContext } from "../types";
 // @ts-ignore
 import { ObjectId } from "mongodb";
 import { RegularUser } from "../entities/RegularUser";
-import { isAuth } from "../middleware/isAuth";
+import { isCustomer } from "../middleware/isCustomer";
+import { isAdmin } from "../middleware/isAdmin";
 import { UserID } from "../entities/UserId";
+import fs from "fs";
+import path from "path";
 
 @InputType()
 class EstimateObjects {
@@ -112,28 +115,12 @@ class RetrieveEstimate {
 @Resolver()
 export class EstimateResolver {
   @Query(() => JobResponse)
-  @UseMiddleware(isAuth)
   async getJobs(@Ctx() { req }: MyContext): Promise<JobResponse> {
-    const user = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
-
-    if (!user) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "Not Authorized to access jobs",
-          },
-        ],
-      };
-    }
-
     return { jobs: await datasource.manager.find(AvailableJobs) };
   }
 
   @Mutation(() => CreateJobResponse)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async addJob(
     @Arg("name", () => String) name: string,
     @Ctx() { req }: MyContext
@@ -162,7 +149,7 @@ export class EstimateResolver {
     return { jobs: true };
   }
   @Mutation(() => EstimateResponse)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async createEstimate(
     @Arg("estimates", () => EstimateInput) estimates: EstimateInput,
     @Ctx() { req }: MyContext
@@ -254,7 +241,7 @@ export class EstimateResolver {
   }
 
   @Mutation(() => RetrieveEstimates)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async getJobsToEstimate(
     @Arg("jobId", () => String) jobId: string,
     @Arg("date", () => String) date: string,
@@ -281,8 +268,6 @@ export class EstimateResolver {
 
     const realDate = new Date(date);
 
-    console.log(realDate);
-
     const startofMonth = new Date(
       realDate.getFullYear(),
       realDate.getMonth(),
@@ -295,12 +280,15 @@ export class EstimateResolver {
     );
 
     const estimates = await datasource.manager.findBy(Estimates, {
-      "jobs._id": { $eq: searchJob?._id },
-      createdAt: {
-        $gte: startofMonth,
-        $lt: startofNextMonth,
+      where: {
+        "jobs._id": { $eq: searchJob?._id },
+        updatedAt: {
+          $gte: startofMonth,
+          $lt: startofNextMonth,
+        },
+        accepted: true,
       },
-      accepted: true,
+
       order: {
         updatedAt: "DESC",
       },
@@ -310,7 +298,7 @@ export class EstimateResolver {
   }
 
   @Query(() => RetrieveEstimates)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async getAllEstimatesQuery(
     @Ctx() { req }: MyContext
   ): Promise<RetrieveEstimates> {
@@ -335,7 +323,7 @@ export class EstimateResolver {
   }
 
   @Mutation(() => RetrieveEstimates)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async getAllEstimates(
     @Arg("date", () => String) date: string,
     @Ctx() { req }: MyContext
@@ -354,11 +342,14 @@ export class EstimateResolver {
     );
 
     const estimates = await datasource.manager.findBy(Estimates, {
-      accepted: true,
-      updatedAt: {
-        $gte: startofMonth,
-        $lt: startofNextMonth,
+      where: {
+        accepted: true,
+        updatedAt: {
+          $gte: startofMonth,
+          $lt: startofNextMonth,
+        },
       },
+
       order: {
         updatedAt: "DESC",
       },
@@ -368,27 +359,12 @@ export class EstimateResolver {
   }
 
   @Mutation(() => RetrieveEstimates)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async getUsersToEstimates(
     @Arg("date", () => String) date: string,
     @Arg("inputUserId", () => String) inputUserId: string,
     @Ctx() { req }: MyContext
   ) {
-    const adminUser = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
-
-    if (!adminUser) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "not authorized",
-          },
-        ],
-      };
-    }
-
     const realDate = new Date(date);
 
     const startofMonth = new Date(
@@ -403,43 +379,30 @@ export class EstimateResolver {
     );
 
     const estimates = await datasource.manager.findBy(Estimates, {
-      updatedAt: {
-        $gte: startofMonth,
-        $lt: startofNextMonth,
-      },
-      accepted: true,
+      where: {
+        accepted: true,
 
-      "userId._id": new ObjectId(inputUserId),
+        "userId._id": new ObjectId(inputUserId),
+        updatedAt: {
+          $gte: startofMonth,
+          $lt: startofNextMonth,
+        },
+      },
+
       order: {
         updatedAt: "DESC",
       },
     } as any);
 
-    console.log(estimates);
-
     return { estimates: estimates };
   }
 
   @Query(() => RetrieveEstimate)
+  @UseMiddleware(isAdmin)
   async getSpecificEstimate(
     @Arg("estimateId", () => String) estimateId: string,
     @Ctx() { req }: MyContext
   ): Promise<RetrieveEstimate> {
-    const adminUser = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
-
-    if (!adminUser) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "not authorized",
-          },
-        ],
-      };
-    }
-
     const specificEstimate = await datasource.manager.findOne(Estimates, {
       where: {
         _id: new ObjectId(estimateId),
@@ -458,7 +421,7 @@ export class EstimateResolver {
   }
 
   @Mutation(() => EstimateResponse)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async updateSpecificEstimate(
     @Arg("estimates", () => EstimateInput) estimates: EstimateInput,
     @Arg("estimateId", () => String) estimateId: string,
@@ -548,7 +511,7 @@ export class EstimateResolver {
   }
 
   @Mutation(() => Deletion)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async deleteEstimate(
     @Ctx() { req, res }: MyContext,
     @Arg("id", () => String) id: string
@@ -572,25 +535,22 @@ export class EstimateResolver {
   }
 
   @Mutation(() => Deletion)
-  @UseMiddleware(isAuth)
+  @UseMiddleware(isAdmin)
   async deleteJob(
     @Ctx() { req, res }: MyContext,
     @Arg("id", () => String) id: string
   ): Promise<Deletion> {
-    if (!req.session.userId) {
-      return {
-        errors: [
-          {
-            field: "authentication",
-            message: "User not authenticated",
-          },
-        ],
-      };
+    const job = await datasource.manager.findOne(AvailableJobs, {
+      where: { _id: new ObjectId(id) },
+    });
+
+    await datasource.manager.delete(AvailableJobs, new ObjectId(id));
+
+    for (let file of (job as any).images) {
+      fs.unlink(path.join(__dirname, "../", file), (err) => {
+        console.log(err);
+      });
     }
-    const estimate = await datasource.manager.delete(
-      AvailableJobs,
-      new ObjectId(id)
-    );
 
     return { success: true };
   }

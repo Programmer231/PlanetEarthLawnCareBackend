@@ -22,7 +22,6 @@ const express_session_1 = __importDefault(require("express-session"));
 const connect_mongodb_session_1 = __importDefault(require("connect-mongodb-session"));
 const cors_1 = __importDefault(require("cors"));
 const typeorm_1 = require("typeorm");
-const path_1 = __importDefault(require("path"));
 const user_1 = require("./resolvers/user");
 const Estimates_1 = require("./entities/Estimates");
 const AdminUser_1 = require("./entities/AdminUser");
@@ -38,7 +37,7 @@ exports.datasource = new typeorm_1.DataSource({
     password: process.env.PASSWORD,
     logging: true,
     //synchronize: true,
-    migrations: [path_1.default.join(__dirname, "./migrations/*")],
+    //migrations: [path.join(__dirname, "./migrations/*")],
     entities: [AdminUser_1.AdminUser, RegularUser_1.RegularUser, AvailableJobs_1.AvailableJobs, Estimates_1.Estimates],
     useUnifiedTopology: true,
     useNewUrlParser: true,
@@ -47,19 +46,16 @@ exports.datasource = new typeorm_1.DataSource({
 const main = () => __awaiter(void 0, void 0, void 0, function* () {
     yield exports.datasource.initialize();
     yield exports.datasource.runMigrations();
-    //await Post.delete({});
     const mongoDbStore = (0, connect_mongodb_session_1.default)(express_session_1.default);
     const app = (0, express_1.default)();
     const store = new mongoDbStore({
         uri: process.env.MONGODB_URL,
         collection: "sessions",
     });
-    app.set("proxy", 1);
     app.use((0, cors_1.default)({
         origin: process.env.CORS_ORIGIN,
         credentials: true,
     }));
-    app.set("trust proxy", !constants_1._prod_);
     app.use((0, express_session_1.default)({
         name: constants_1.COOKIE_NAME,
         store: store,
@@ -84,7 +80,7 @@ const main = () => __awaiter(void 0, void 0, void 0, function* () {
     });
     yield apolloServer.start();
     apolloServer.applyMiddleware({ app, cors: false });
-    app.listen(4000, () => {
+    app.listen(parseInt(process.env.PORT), () => {
         console.log("server started on localhost:4000");
     });
 });

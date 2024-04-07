@@ -295,12 +295,14 @@ let EstimateResolver = class EstimateResolver {
             const startofMonth = new Date(realDate.getFullYear(), realDate.getMonth(), 1);
             const startofNextMonth = new Date(realDate.getFullYear(), realDate.getMonth() + 1, 1);
             const estimates = yield __1.datasource.manager.findBy(Estimates_1.Estimates, {
-                "jobs._id": { $eq: searchJob === null || searchJob === void 0 ? void 0 : searchJob._id },
-                createdAt: {
-                    $gte: startofMonth,
-                    $lt: startofNextMonth,
+                where: {
+                    "jobs._id": { $eq: searchJob === null || searchJob === void 0 ? void 0 : searchJob._id },
+                    createdAt: {
+                        $gte: startofMonth,
+                        $lt: startofNextMonth,
+                    },
+                    accepted: true,
                 },
-                accepted: true,
                 order: {
                     updatedAt: "DESC",
                 },
@@ -336,10 +338,12 @@ let EstimateResolver = class EstimateResolver {
             const startofMonth = new Date(realDate.getFullYear(), realDate.getMonth(), 1);
             const startofNextMonth = new Date(realDate.getFullYear(), realDate.getMonth() + 1, 1);
             const estimates = yield __1.datasource.manager.findBy(Estimates_1.Estimates, {
-                accepted: true,
-                updatedAt: {
-                    $gte: startofMonth,
-                    $lt: startofNextMonth,
+                where: {
+                    accepted: true,
+                    updatedAt: {
+                        $gte: startofMonth,
+                        $lt: startofNextMonth,
+                    },
                 },
                 order: {
                     updatedAt: "DESC",
@@ -367,17 +371,18 @@ let EstimateResolver = class EstimateResolver {
             const startofMonth = new Date(realDate.getFullYear(), realDate.getMonth(), 1);
             const startofNextMonth = new Date(realDate.getFullYear(), realDate.getMonth() + 1, 1);
             const estimates = yield __1.datasource.manager.findBy(Estimates_1.Estimates, {
-                updatedAt: {
-                    $gte: startofMonth,
-                    $lt: startofNextMonth,
+                where: {
+                    accepted: true,
+                    "userId._id": new mongodb_1.ObjectId(inputUserId),
+                    updatedAt: {
+                        $gte: startofMonth,
+                        $lt: startofNextMonth,
+                    },
                 },
-                accepted: true,
-                "userId._id": new mongodb_1.ObjectId(inputUserId),
                 order: {
                     updatedAt: "DESC",
                 },
             });
-            console.log(estimates);
             return { estimates: estimates };
         });
     }
@@ -582,6 +587,7 @@ __decorate([
 ], EstimateResolver.prototype, "getUsersToEstimates", null);
 __decorate([
     (0, type_graphql_1.Query)(() => RetrieveEstimate),
+    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
     __param(0, (0, type_graphql_1.Arg)("estimateId", () => String)),
     __param(1, (0, type_graphql_1.Ctx)()),
     __metadata("design:type", Function),

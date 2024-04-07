@@ -14,11 +14,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendEmail = void 0;
 const mail_1 = __importDefault(require("@sendgrid/mail"));
-const constants_1 = require("../constants");
 // async..await is not allowed in global scope, must use a wrapper
 function sendEmail(to, html) {
     return __awaiter(this, void 0, void 0, function* () {
-        mail_1.default.setApiKey(constants_1.SENDGRID_API_KEY);
+        mail_1.default.setApiKey(process.env.SENDGRID_API_KEY);
         let msg = {
             from: "sebasn327@gmail.com",
             to: to,

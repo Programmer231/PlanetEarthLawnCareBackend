@@ -8,7 +8,6 @@ import {
 } from "typeorm";
 // @ts-ignore
 import { ObjectId } from "mongodb";
-import { Estimates } from "./Estimates";
 
 @ObjectType()
 @Entity()
@@ -36,4 +35,17 @@ export class RegularUser {
   @Field()
   @Column({ unique: true })
   phoneNumber!: string;
+
+  @Field(() => String)
+  @Column({ unique: true })
+  email!: string;
+
+  @Column()
+  password!: string;
+
+  @Column({ type: "text", nullable: true })
+  forgotpassword!: string | null;
+
+  @Column({ type: "date", nullable: true })
+  forgotPasswordExpiry!: Date | null;
 }

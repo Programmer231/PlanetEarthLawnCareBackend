@@ -49,4 +49,12 @@ export class Estimates {
   @Field(() => Number)
   @Column()
   totalCost!: number;
+
+  @Field(() => Boolean)
+  @Column()
+  ClientViewed?: boolean;
+
+  @Field(() => Boolean)
+  @Column()
+  AdminViewed?: Boolean;
 }
