@@ -20,6 +20,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 var _a;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EstimateResolver = void 0;
@@ -31,8 +34,11 @@ const Estimates_1 = require("../entities/Estimates");
 // @ts-ignore
 const mongodb_1 = require("mongodb");
 const RegularUser_1 = require("../entities/RegularUser");
-const isAuth_1 = require("../middleware/isAuth");
+const isCustomer_1 = require("../middleware/isCustomer");
+const isAdmin_1 = require("../middleware/isAdmin");
 const UserId_1 = require("../entities/UserId");
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 let EstimateObjects = class EstimateObjects {
 };
 __decorate([
@@ -50,6 +56,15 @@ __decorate([
 EstimateObjects = __decorate([
     (0, type_graphql_1.InputType)()
 ], EstimateObjects);
+let JobInputs = class JobInputs {
+};
+__decorate([
+    (0, type_graphql_1.Field)(() => [String]),
+    __metadata("design:type", Array)
+], JobInputs.prototype, "jobId", void 0);
+JobInputs = __decorate([
+    (0, type_graphql_1.InputType)()
+], JobInputs);
 let Deletion = class Deletion {
 };
 __decorate([
@@ -106,19 +121,6 @@ __decorate([
 JobResponse = __decorate([
     (0, type_graphql_1.ObjectType)()
 ], JobResponse);
-let CreateJobResponse = class CreateJobResponse {
-};
-__decorate([
-    (0, type_graphql_1.Field)(() => Boolean, { nullable: true }),
-    __metadata("design:type", Boolean)
-], CreateJobResponse.prototype, "jobs", void 0);
-__decorate([
-    (0, type_graphql_1.Field)(() => [ErrorResponse], { nullable: true }),
-    __metadata("design:type", Array)
-], CreateJobResponse.prototype, "errors", void 0);
-CreateJobResponse = __decorate([
-    (0, type_graphql_1.ObjectType)()
-], CreateJobResponse);
 let EstimateResponse = class EstimateResponse {
 };
 __decorate([
@@ -161,41 +163,7 @@ RetrieveEstimate = __decorate([
 let EstimateResolver = class EstimateResolver {
     getJobs({ req }) {
         return __awaiter(this, void 0, void 0, function* () {
-            const user = yield __1.datasource.manager.findOneBy(AdminUser_1.AdminUser, {
-                _id: new mongodb_1.ObjectId(req.session.userId),
-            });
-            if (!user) {
-                return {
-                    errors: [
-                        {
-                            field: "authorization",
-                            message: "Not Authorized to access jobs",
-                        },
-                    ],
-                };
-            }
             return { jobs: yield __1.datasource.manager.find(AvailableJobs_1.AvailableJobs) };
-        });
-    }
-    addJob(name, { req }) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const adminUser = yield __1.datasource.manager.findOneBy(AdminUser_1.AdminUser, {
-                _id: new mongodb_1.ObjectId(req.session.userId),
-            });
-            if (!adminUser) {
-                return {
-                    errors: [
-                        {
-                            field: "authorization",
-                            message: "not authorized",
-                        },
-                    ],
-                };
-            }
-            const job = new AvailableJobs_1.AvailableJobs();
-            job.name = name;
-            yield __1.datasource.manager.save(job);
-            return { jobs: true };
         });
     }
     createEstimate(estimates, { req }) {
@@ -263,6 +231,7 @@ let EstimateResolver = class EstimateResolver {
                 userEstimate.name = user === null || user === void 0 ? void 0 : user.name;
                 userEstimate.address = user === null || user === void 0 ? void 0 : user.address;
                 userEstimate.totalCost = parseFloat(totalCost.toFixed(2));
+                userEstimate.checked = true;
                 yield __1.datasource.manager.save(userEstimate);
             }
             catch (err) {
@@ -291,13 +260,12 @@ let EstimateResolver = class EstimateResolver {
                 where: { _id: new mongodb_1.ObjectId(jobId) },
             });
             const realDate = new Date(date);
-            console.log(realDate);
             const startofMonth = new Date(realDate.getFullYear(), realDate.getMonth(), 1);
             const startofNextMonth = new Date(realDate.getFullYear(), realDate.getMonth() + 1, 1);
             const estimates = yield __1.datasource.manager.findBy(Estimates_1.Estimates, {
                 where: {
                     "jobs._id": { $eq: searchJob === null || searchJob === void 0 ? void 0 : searchJob._id },
-                    createdAt: {
+                    updatedAt: {
                         $gte: startofMonth,
                         $lt: startofNextMonth,
                     },
@@ -354,19 +322,6 @@ let EstimateResolver = class EstimateResolver {
     }
     getUsersToEstimates(date, inputUserId, { req }) {
         return __awaiter(this, void 0, void 0, function* () {
-            const adminUser = yield __1.datasource.manager.findOneBy(AdminUser_1.AdminUser, {
-                _id: new mongodb_1.ObjectId(req.session.userId),
-            });
-            if (!adminUser) {
-                return {
-                    errors: [
-                        {
-                            field: "authorization",
-                            message: "not authorized",
-                        },
-                    ],
-                };
-            }
             const realDate = new Date(date);
             const startofMonth = new Date(realDate.getFullYear(), realDate.getMonth(), 1);
             const startofNextMonth = new Date(realDate.getFullYear(), realDate.getMonth() + 1, 1);
@@ -388,19 +343,6 @@ let EstimateResolver = class EstimateResolver {
     }
     getSpecificEstimate(estimateId, { req }) {
         return __awaiter(this, void 0, void 0, function* () {
-            const adminUser = yield __1.datasource.manager.findOneBy(AdminUser_1.AdminUser, {
-                _id: new mongodb_1.ObjectId(req.session.userId),
-            });
-            if (!adminUser) {
-                return {
-                    errors: [
-                        {
-                            field: "authorization",
-                            message: "not authorized",
-                        },
-                    ],
-                };
-            }
             const specificEstimate = yield __1.datasource.manager.findOne(Estimates_1.Estimates, {
                 where: {
                     _id: new mongodb_1.ObjectId(estimateId),
@@ -479,6 +421,7 @@ let EstimateResolver = class EstimateResolver {
                 estimate.name = user === null || user === void 0 ? void 0 : user.name;
                 estimate.address = user === null || user === void 0 ? void 0 : user.address;
                 estimate.totalCost = parseFloat(totalCost.toFixed(2));
+                estimate.checked = true;
                 yield __1.datasource.manager.save(estimate);
             }
             catch (err) {
@@ -489,59 +432,118 @@ let EstimateResolver = class EstimateResolver {
             return { estimateSubmitted: true };
         });
     }
-    deleteEstimate({ req, res }, id) {
+    deleteEstimate(id) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!req.session.userId) {
-                return {
-                    errors: [
-                        {
-                            field: "authentication",
-                            message: "User not authenticated",
-                        },
-                    ],
-                };
-            }
+            const specificEstimate = yield __1.datasource.manager.findOne(Estimates_1.Estimates, {
+                where: { _id: new mongodb_1.ObjectId(id) },
+            });
             const estimate = yield __1.datasource.manager.delete(Estimates_1.Estimates, new mongodb_1.ObjectId(id));
+            console.log(specificEstimate);
+            if (specificEstimate) {
+                for (let file of specificEstimate.images) {
+                    fs_1.default.unlink(path_1.default.join(__dirname, "../", file), (err) => {
+                        console.log(err);
+                    });
+                }
+            }
             return { success: true };
         });
     }
-    deleteJob({ req, res }, id) {
+    deleteJob(id) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!req.session.userId) {
+            const job = yield __1.datasource.manager.findOne(AvailableJobs_1.AvailableJobs, {
+                where: { _id: new mongodb_1.ObjectId(id) },
+            });
+            yield __1.datasource.manager.delete(AvailableJobs_1.AvailableJobs, new mongodb_1.ObjectId(id));
+            for (let file of job.images) {
+                fs_1.default.unlink(path_1.default.join(__dirname, "../", file), (err) => {
+                    console.log(err);
+                });
+            }
+            return { success: true };
+        });
+    }
+    createEstimateByUser(jobs, { req }) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const regularUser = yield __1.datasource.manager.findOneBy(RegularUser_1.RegularUser, {
+                _id: new mongodb_1.ObjectId(req.session.userId),
+            });
+            if (!regularUser) {
                 return {
                     errors: [
                         {
-                            field: "authentication",
-                            message: "User not authenticated",
+                            field: "authorization",
+                            message: "not authorized",
                         },
                     ],
                 };
             }
-            const estimate = yield __1.datasource.manager.delete(AvailableJobs_1.AvailableJobs, new mongodb_1.ObjectId(id));
-            return { success: true };
+            const userEstimate = new Estimates_1.Estimates();
+            userEstimate.userId = new UserId_1.UserID();
+            userEstimate.userId._id = new mongodb_1.ObjectId(req.session.userId);
+            userEstimate.jobs = [];
+            userEstimate.accepted = false;
+            try {
+                let totalCost = 0;
+                for (let x = 0; x < jobs.jobId.length; x++) {
+                    let jobId = new mongodb_1.ObjectId(jobs.jobId[x]);
+                    let cost = 0;
+                    let quantity = 0;
+                    totalCost += cost * quantity;
+                    const specificJob = yield __1.datasource.manager.findOne(AvailableJobs_1.AvailableJobs, {
+                        where: { _id: jobId },
+                    });
+                    if (!specificJob) {
+                        return {
+                            errors: [
+                                {
+                                    field: "Error",
+                                    message: "Unkown Error Occurred",
+                                },
+                            ],
+                        };
+                    }
+                    userEstimate.jobs.push({
+                        _id: jobId,
+                        cost: cost,
+                        quantity: quantity,
+                        name: specificJob.name,
+                    });
+                }
+                userEstimate.name = regularUser === null || regularUser === void 0 ? void 0 : regularUser.name;
+                userEstimate.address = regularUser === null || regularUser === void 0 ? void 0 : regularUser.address;
+                userEstimate.totalCost = parseFloat(totalCost.toFixed(2));
+                userEstimate.checked = false;
+                yield __1.datasource.manager.save(userEstimate);
+            }
+            catch (err) {
+                console.log("unsuccessful");
+                console.log(err);
+            }
+            return { estimateSubmitted: true };
+        });
+    }
+    getEstimatesSpecificUser({ req }) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const estimates = yield __1.datasource.manager.findBy(Estimates_1.Estimates, {
+                where: {
+                    "userId._id": new mongodb_1.ObjectId(req.session.userId),
+                },
+            });
+            return { estimates: estimates };
         });
     }
 };
 __decorate([
     (0, type_graphql_1.Query)(() => JobResponse),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
     __param(0, (0, type_graphql_1.Ctx)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], EstimateResolver.prototype, "getJobs", null);
 __decorate([
-    (0, type_graphql_1.Mutation)(() => CreateJobResponse),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
-    __param(0, (0, type_graphql_1.Arg)("name", () => String)),
-    __param(1, (0, type_graphql_1.Ctx)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
-    __metadata("design:returntype", Promise)
-], EstimateResolver.prototype, "addJob", null);
-__decorate([
     (0, type_graphql_1.Mutation)(() => EstimateResponse),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Arg)("estimates", () => EstimateInput)),
     __param(1, (0, type_graphql_1.Ctx)()),
     __metadata("design:type", Function),
@@ -550,7 +552,7 @@ __decorate([
 ], EstimateResolver.prototype, "createEstimate", null);
 __decorate([
     (0, type_graphql_1.Mutation)(() => RetrieveEstimates),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Arg)("jobId", () => String)),
     __param(1, (0, type_graphql_1.Arg)("date", () => String)),
     __param(2, (0, type_graphql_1.Ctx)()),
@@ -560,7 +562,7 @@ __decorate([
 ], EstimateResolver.prototype, "getJobsToEstimate", null);
 __decorate([
     (0, type_graphql_1.Query)(() => RetrieveEstimates),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Ctx)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -568,7 +570,7 @@ __decorate([
 ], EstimateResolver.prototype, "getAllEstimatesQuery", null);
 __decorate([
     (0, type_graphql_1.Mutation)(() => RetrieveEstimates),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Arg)("date", () => String)),
     __param(1, (0, type_graphql_1.Ctx)()),
     __metadata("design:type", Function),
@@ -577,7 +579,7 @@ __decorate([
 ], EstimateResolver.prototype, "getAllEstimates", null);
 __decorate([
     (0, type_graphql_1.Mutation)(() => RetrieveEstimates),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Arg)("date", () => String)),
     __param(1, (0, type_graphql_1.Arg)("inputUserId", () => String)),
     __param(2, (0, type_graphql_1.Ctx)()),
@@ -587,7 +589,7 @@ __decorate([
 ], EstimateResolver.prototype, "getUsersToEstimates", null);
 __decorate([
     (0, type_graphql_1.Query)(() => RetrieveEstimate),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Arg)("estimateId", () => String)),
     __param(1, (0, type_graphql_1.Ctx)()),
     __metadata("design:type", Function),
@@ -596,7 +598,7 @@ __decorate([
 ], EstimateResolver.prototype, "getSpecificEstimate", null);
 __decorate([
     (0, type_graphql_1.Mutation)(() => EstimateResponse),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Arg)("estimates", () => EstimateInput)),
     __param(1, (0, type_graphql_1.Arg)("estimateId", () => String)),
     __param(2, (0, type_graphql_1.Ctx)()),
@@ -606,22 +608,37 @@ __decorate([
 ], EstimateResolver.prototype, "updateSpecificEstimate", null);
 __decorate([
     (0, type_graphql_1.Mutation)(() => Deletion),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
-    __param(0, (0, type_graphql_1.Ctx)()),
-    __param(1, (0, type_graphql_1.Arg)("id", () => String)),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
+    __param(0, (0, type_graphql_1.Arg)("id", () => String)),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], EstimateResolver.prototype, "deleteEstimate", null);
 __decorate([
     (0, type_graphql_1.Mutation)(() => Deletion),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
-    __param(0, (0, type_graphql_1.Ctx)()),
-    __param(1, (0, type_graphql_1.Arg)("id", () => String)),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
+    __param(0, (0, type_graphql_1.Arg)("id", () => String)),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [String]),
     __metadata("design:returntype", Promise)
 ], EstimateResolver.prototype, "deleteJob", null);
+__decorate([
+    (0, type_graphql_1.Mutation)(() => EstimateResponse),
+    (0, type_graphql_1.UseMiddleware)(isCustomer_1.isCustomer),
+    __param(0, (0, type_graphql_1.Arg)("jobs", () => JobInputs)),
+    __param(1, (0, type_graphql_1.Ctx)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [JobInputs, Object]),
+    __metadata("design:returntype", Promise)
+], EstimateResolver.prototype, "createEstimateByUser", null);
+__decorate([
+    (0, type_graphql_1.Query)(() => RetrieveEstimates),
+    (0, type_graphql_1.UseMiddleware)(isCustomer_1.isCustomer),
+    __param(0, (0, type_graphql_1.Ctx)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], EstimateResolver.prototype, "getEstimatesSpecificUser", null);
 EstimateResolver = __decorate([
     (0, type_graphql_1.Resolver)()
 ], EstimateResolver);

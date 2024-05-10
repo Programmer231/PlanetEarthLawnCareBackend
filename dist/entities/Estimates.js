@@ -64,6 +64,16 @@ __decorate([
     (0, typeorm_1.Column)(),
     __metadata("design:type", Number)
 ], Estimates.prototype, "totalCost", void 0);
+__decorate([
+    (0, type_graphql_1.Field)(() => [String]),
+    (0, typeorm_1.Column)(),
+    __metadata("design:type", Array)
+], Estimates.prototype, "images", void 0);
+__decorate([
+    (0, type_graphql_1.Field)(() => Boolean),
+    (0, typeorm_1.Column)(),
+    __metadata("design:type", Boolean)
+], Estimates.prototype, "checked", void 0);
 Estimates = __decorate([
     (0, type_graphql_1.ObjectType)(),
     (0, typeorm_1.Entity)()

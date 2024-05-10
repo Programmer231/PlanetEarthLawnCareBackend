@@ -35,7 +35,21 @@ const sendEmail_1 = require("../utils/sendEmail");
 const __1 = require("..");
 // @ts-ignore
 const mongodb_1 = require("mongodb");
-const isAuth_1 = require("../middleware/isAuth");
+const isAdmin_1 = require("../middleware/isAdmin");
+const RegularUser_1 = require("../entities/RegularUser");
+let RegularUserResponse = class RegularUserResponse {
+};
+__decorate([
+    (0, type_graphql_1.Field)(() => [RegularUser_1.RegularUser], { nullable: true }),
+    __metadata("design:type", Array)
+], RegularUserResponse.prototype, "users", void 0);
+__decorate([
+    (0, type_graphql_1.Field)(() => [FieldError], { nullable: true }),
+    __metadata("design:type", Array)
+], RegularUserResponse.prototype, "errors", void 0);
+RegularUserResponse = __decorate([
+    (0, type_graphql_1.ObjectType)()
+], RegularUserResponse);
 let DeleteUser = class DeleteUser {
 };
 __decorate([
@@ -69,8 +83,8 @@ __decorate([
     __metadata("design:type", Array)
 ], UserResponse.prototype, "errors", void 0);
 __decorate([
-    (0, type_graphql_1.Field)(() => AdminUser_1.AdminUser, { nullable: true }),
-    __metadata("design:type", AdminUser_1.AdminUser)
+    (0, type_graphql_1.Field)(() => Boolean, { nullable: true }),
+    __metadata("design:type", Boolean)
 ], UserResponse.prototype, "user", void 0);
 UserResponse = __decorate([
     (0, type_graphql_1.ObjectType)()
@@ -78,12 +92,15 @@ UserResponse = __decorate([
 let UserResolver = class UserResolver {
     me({ req }) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!req.session.userId) {
+            if (!req.session.userId || !req.session.admin) {
                 return null;
             }
             const user = yield __1.datasource.manager.findOneBy(AdminUser_1.AdminUser, {
                 _id: new mongodb_1.ObjectId(req.session.userId),
             });
+            if (!user) {
+                return null;
+            }
             if (user) {
                 user._id = user === null || user === void 0 ? void 0 : user._id.toString();
             }
@@ -104,7 +121,7 @@ let UserResolver = class UserResolver {
                 user.email = email;
                 yield __1.datasource.manager.save(user);
                 req.session.userId = user._id.toString();
-                return { user: user };
+                return { user: true };
             }
             catch (err) {
                 if (err.detail.includes("already exists")) {
@@ -151,8 +168,10 @@ let UserResolver = class UserResolver {
             //this will set a cookie on the user
             //keep them logged in
             req.session.userId = user._id.toString();
-            req.session.admin = false;
-            return { user: user };
+            req.session.admin = true;
+            req.session.customer = false;
+            req.session.employee = false;
+            return { user: true };
         });
     }
     sendEmail(email) {
@@ -198,25 +217,65 @@ let UserResolver = class UserResolver {
             const password = yield argon2_1.default.hash(newPassword);
             user.password = password;
             user.forgotpassword = null;
-            yield __1.datasource.manager.save(AdminUser_1.AdminUser);
+            yield __1.datasource.manager.save(user);
             req.session.userId = user._id.toString();
             req.session.admin = false;
-            return { user: user };
+            return { user: true };
         });
     }
     logout({ req, res }) {
         return __awaiter(this, void 0, void 0, function* () {
             return new Promise((resolve) => {
                 req.session.destroy((err) => {
-                    res.clearCookie(constants_1.COOKIE_NAME);
+                    res.clearCookie(process.env.COOKIENAME);
                     if (err) {
                         console.log(err);
                         resolve(false);
-                        return;
                     }
                     resolve(true);
                 });
             });
+        });
+    }
+    getUsers({ req }) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!req.session.userId) {
+                return {
+                    errors: [
+                        {
+                            field: "authentication",
+                            message: "User not authenticated",
+                        },
+                    ],
+                };
+            }
+            // if (!req.session.admin) {
+            //   return {
+            //     errors: [
+            //       {
+            //         field: "authorization",
+            //         message: "User not authorized",
+            //       },
+            //     ],
+            //   };
+            // }
+            return { users: yield __1.datasource.manager.find(RegularUser_1.RegularUser) };
+        });
+    }
+    deleteUser({ req, res }, id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (!req.session.userId) {
+                return {
+                    errors: [
+                        {
+                            field: "authentication",
+                            message: "User not authenticated",
+                        },
+                    ],
+                };
+            }
+            const user = yield __1.datasource.manager.delete(RegularUser_1.RegularUser, new mongodb_1.ObjectId(id));
+            return { success: true };
         });
     }
 };
@@ -229,7 +288,7 @@ __decorate([
 ], UserResolver.prototype, "me", null);
 __decorate([
     (0, type_graphql_1.Mutation)(() => UserResponse),
-    (0, type_graphql_1.UseMiddleware)(isAuth_1.isAuth),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
     __param(0, (0, type_graphql_1.Arg)("email", () => String)),
     __param(1, (0, type_graphql_1.Arg)("username", () => String)),
     __param(2, (0, type_graphql_1.Arg)("password", () => String)),
@@ -270,6 +329,23 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], UserResolver.prototype, "logout", null);
+__decorate([
+    (0, type_graphql_1.Query)(() => RegularUserResponse),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
+    __param(0, (0, type_graphql_1.Ctx)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], UserResolver.prototype, "getUsers", null);
+__decorate([
+    (0, type_graphql_1.Mutation)(() => DeleteUser),
+    (0, type_graphql_1.UseMiddleware)(isAdmin_1.isAdmin),
+    __param(0, (0, type_graphql_1.Ctx)()),
+    __param(1, (0, type_graphql_1.Arg)("id", () => String)),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], UserResolver.prototype, "deleteUser", null);
 UserResolver = __decorate([
     (0, type_graphql_1.Resolver)()
 ], UserResolver);

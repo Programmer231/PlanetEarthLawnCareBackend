@@ -59,7 +59,7 @@ class UserResponse {
 @Resolver()
 export class UserResolver {
   @Query(() => AdminUser, { nullable: true })
-  async me(@Ctx() { req }: MyContext): Promise<AdminUser | null> {
+  async me(@Ctx() { req }: any): Promise<AdminUser | null> {
     if (!req.session.userId || !req.session.admin) {
       return null;
     }
@@ -84,7 +84,7 @@ export class UserResolver {
     @Arg("email", () => String) email: string,
     @Arg("username", () => String) username: string,
     @Arg("password", () => String) password: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<UserResponse> {
     const response = validateRegister(email, username, password);
 
@@ -123,7 +123,7 @@ export class UserResolver {
   async login(
     @Arg("usernameOrEmail", () => String) usernameOrEmail: string,
     @Arg("password", () => String) password: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<UserResponse> {
     const user = await datasource.manager.findOneBy(
       AdminUser,
@@ -196,7 +196,7 @@ export class UserResolver {
   async forgotPassword(
     @Arg("newPassword", () => String) newPassword: string,
     @Arg("token", () => String) token: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<UserResponse> {
     if (newPassword.length <= 2) {
       return {
@@ -240,10 +240,9 @@ export class UserResolver {
   }
 
   @Mutation(() => Boolean)
-  @UseMiddleware(isAdmin)
-  async logout(@Ctx() { req, res }: MyContext): Promise<Boolean> {
+  async logout(@Ctx() { req, res }: any): Promise<Boolean> {
     return new Promise((resolve) => {
-      req.session.destroy((err) => {
+      req.session.destroy((err: any) => {
         res.clearCookie(process.env.COOKIENAME as string);
         if (err) {
           console.log(err);
@@ -256,7 +255,7 @@ export class UserResolver {
 
   @Query(() => RegularUserResponse)
   @UseMiddleware(isAdmin)
-  async getUsers(@Ctx() { req }: MyContext): Promise<RegularUserResponse> {
+  async getUsers(@Ctx() { req }: any): Promise<RegularUserResponse> {
     if (!req.session.userId) {
       return {
         errors: [
@@ -284,7 +283,7 @@ export class UserResolver {
   @Mutation(() => DeleteUser)
   @UseMiddleware(isAdmin)
   async deleteUser(
-    @Ctx() { req, res }: MyContext,
+    @Ctx() { req, res }: any,
     @Arg("id", () => String) id: string
   ): Promise<DeleteUser> {
     if (!req.session.userId) {

@@ -50,11 +50,11 @@ export class Estimates {
   @Column()
   totalCost!: number;
 
-  @Field(() => Boolean)
+  @Field(() => [String])
   @Column()
-  ClientViewed?: boolean;
+  images?: string[];
 
   @Field(() => Boolean)
   @Column()
-  AdminViewed?: Boolean;
+  checked!: boolean;
 }

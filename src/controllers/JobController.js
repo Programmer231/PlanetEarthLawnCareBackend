@@ -3,9 +3,9 @@ import AvailableJobs from "../models/AvailableJobs";
 import HttpError from "../models/http-error";
 
 export const jobUpload = async (req, res, next) => {
-  console.log(req.files);
   const job = new AvailableJobs({
     name: req.body.name,
+    description: req.body.description,
     images: req.files.map((file) => "/images/jobs/" + file.filename),
   });
   try {

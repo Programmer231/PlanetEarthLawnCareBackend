@@ -20,7 +20,7 @@ export const validateRegister = (
     ];
   }
 
-  if (password.length <= 8) {
+  if (password.length < 8) {
     return [
       {
         field: "password",

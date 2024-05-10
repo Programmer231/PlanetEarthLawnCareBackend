@@ -16,11 +16,11 @@ import { EstimateResolver } from "./resolvers/estimate";
 import { AvailableJobs } from "./entities/AvailableJobs";
 import { RegularUserResolver } from "./resolvers/regularUser";
 import path from "path";
-import FileUploadRoutes from "./router/JobRouter";
+import jobFileUploadRoutes from "./router/JobRouter";
 import fs from "fs";
 import mongoose from "mongoose";
-import bodyParser from "body-parser";
 import ExpressMongoSanitize from "express-mongo-sanitize";
+import estimateFileUploadRoutes from "./router/EstimateRouter";
 
 require("dotenv").config();
 declare module "express-session" {
@@ -86,7 +86,7 @@ const main = async () => {
   });
 
   app.use(ApolloSessionMiddlewareCookies);
-  app.use("/images", express.static(path.join(__dirname, "images")));
+  app.use("/images/jobs", express.static(path.join(__dirname, "images/jobs")));
 
   const apolloServer = new ApolloServer({
     schema: await buildSchema({
@@ -99,12 +99,13 @@ const main = async () => {
 
   await apolloServer.start();
 
-  apolloServer.applyMiddleware({ app, cors: false });
+  apolloServer.applyMiddleware({ app, cors: false } as any);
 
   app.use(express.json());
   app.use(ExpressMongoSanitize());
 
-  app.use("/jobs", FileUploadRoutes);
+  app.use("/jobs", jobFileUploadRoutes);
+  app.use("/estimates", estimateFileUploadRoutes);
 
   app.use((error: any, req: any, res: any, next: any) => {
     if (req.file) {

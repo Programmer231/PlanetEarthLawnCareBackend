@@ -8,7 +8,7 @@ const MIME_TYPE_MAP = {
   "image/jpg": "jpg",
 };
 
-const fileUpload = multer({
+const jobFileUpload = multer({
   storage: multer.diskStorage({
     destination: (req, file, cb) => {
       cb(null, path.join(__dirname, "../images/jobs"));
@@ -28,4 +28,4 @@ const fileUpload = multer({
   },
 });
 
-module.exports = fileUpload;
+module.exports = jobFileUpload;

@@ -1,4 +1,4 @@
-FROM node:14
+FROM node:18
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -7,13 +7,12 @@ WORKDIR /usr/src/app
 # A wildcard is used to ensure both package.json AND package-lock.json are copied
 # where available (npm@5+)
 COPY package.json ./
-COPY yarn.lock ./
 
-RUN yarn
+RUN npm install --legacy-peer-deps
 
 COPY . .
 
-RUN yarn build
+RUN npm run build
 
 EXPOSE 8080
 CMD [ "node", "dist/index.js" ]

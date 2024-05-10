@@ -29,6 +29,12 @@ const RegularUser_1 = require("./entities/RegularUser");
 const estimate_1 = require("./resolvers/estimate");
 const AvailableJobs_1 = require("./entities/AvailableJobs");
 const regularUser_1 = require("./resolvers/regularUser");
+const path_1 = __importDefault(require("path"));
+const JobRouter_1 = __importDefault(require("./router/JobRouter"));
+const fs_1 = __importDefault(require("fs"));
+const mongoose_1 = __importDefault(require("mongoose"));
+const express_mongo_sanitize_1 = __importDefault(require("express-mongo-sanitize"));
+const EstimateRouter_1 = __importDefault(require("./router/EstimateRouter"));
 require("dotenv").config();
 exports.datasource = new typeorm_1.DataSource({
     type: "mongodb",
@@ -48,38 +54,64 @@ const main = () => __awaiter(void 0, void 0, void 0, function* () {
     yield exports.datasource.runMigrations();
     const mongoDbStore = (0, connect_mongodb_session_1.default)(express_session_1.default);
     const app = (0, express_1.default)();
-    const store = new mongoDbStore({
+    const PELCStore = new mongoDbStore({
         uri: process.env.MONGODB_URL,
         collection: "sessions",
     });
+    app.set("trust proxy", 1);
     app.use((0, cors_1.default)({
-        origin: process.env.CORS_ORIGIN,
+        origin: [
+            process.env.CORS_ORIGIN_DEV,
+            "https://planetearthlawncare.org",
+        ],
         credentials: true,
     }));
-    app.use((0, express_session_1.default)({
-        name: constants_1.COOKIE_NAME,
-        store: store,
+    const ApolloSessionMiddlewareCookies = (0, express_session_1.default)({
+        name: process.env.COOKIENAME,
+        store: PELCStore,
         cookie: {
             maxAge: 1000 * 60 * 60 * 24 * 30,
             secure: constants_1._prod_,
-            domain: constants_1._prod_ ? ".planetearthlawncare.org" : undefined,
             httpOnly: true,
+            domain: constants_1._prod_ ? ".planetearthlawncare.org" : undefined,
         },
         resave: false,
         saveUninitialized: false,
         secret: process.env.AUTHENTICATION_KEY,
-    }));
+    });
+    app.use(ApolloSessionMiddlewareCookies);
+    app.use("/images/jobs", express_1.default.static(path_1.default.join(__dirname, "images/jobs")));
     const apolloServer = new apollo_server_express_1.ApolloServer({
         schema: yield (0, type_graphql_1.buildSchema)({
             resolvers: [user_1.UserResolver, estimate_1.EstimateResolver, regularUser_1.RegularUserResolver],
             validate: false,
         }),
         context: ({ req, res }) => ({ req, res }),
-        csrfPrevention: true,
         cache: "bounded",
     });
     yield apolloServer.start();
     apolloServer.applyMiddleware({ app, cors: false });
+    app.use(express_1.default.json());
+    app.use((0, express_mongo_sanitize_1.default)());
+    app.use("/jobs", JobRouter_1.default);
+    app.use("/estimates", EstimateRouter_1.default);
+    app.use((error, req, res, next) => {
+        if (req.file) {
+            fs_1.default.unlink(req.file.path, (err) => {
+                console.log(err);
+            });
+        }
+        if (req.files) {
+            for (let file of req.files) {
+                fs_1.default.unlink(file.path, (err) => {
+                    console.log(err);
+                });
+            }
+        }
+        res.status(error.code || 500);
+        return res.json({ message: error.message || "An unknown error occurred!" });
+    });
+    yield mongoose_1.default.connect(process.env.MONGODB_URL);
     app.listen(parseInt(process.env.PORT), () => {
         console.log("server started on localhost:4000");
     });

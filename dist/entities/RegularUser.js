@@ -47,6 +47,23 @@ __decorate([
     (0, typeorm_1.Column)({ unique: true }),
     __metadata("design:type", String)
 ], RegularUser.prototype, "phoneNumber", void 0);
+__decorate([
+    (0, type_graphql_1.Field)(() => String),
+    (0, typeorm_1.Column)({ unique: true }),
+    __metadata("design:type", String)
+], RegularUser.prototype, "email", void 0);
+__decorate([
+    (0, typeorm_1.Column)(),
+    __metadata("design:type", String)
+], RegularUser.prototype, "password", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: "text", nullable: true }),
+    __metadata("design:type", Object)
+], RegularUser.prototype, "forgotpassword", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: "date", nullable: true }),
+    __metadata("design:type", Object)
+], RegularUser.prototype, "forgotPasswordExpiry", void 0);
 RegularUser = __decorate([
     (0, type_graphql_1.ObjectType)(),
     (0, typeorm_1.Entity)()

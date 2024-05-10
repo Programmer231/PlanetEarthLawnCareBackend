@@ -47,7 +47,7 @@ export class RegularUserResolver {
     @Arg("address", () => String) address: string,
     @Arg("password", () => String) password: string,
     @Arg("email", () => String) email: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<regularUserStatusResponse> {
     const response = validateRegister(email, name, password);
 
@@ -68,10 +68,12 @@ export class RegularUserResolver {
     try {
       let user = await datasource.manager.save(newUser);
 
-      req.session.userId = user._id.toString();
-      req.session.admin = false;
-      req.session.customer = true;
-      req.session.employee = false;
+      if (!req.session.admin) {
+        req.session.userId = user._id.toString();
+        req.session.admin = false;
+        req.session.customer = true;
+        req.session.employee = false;
+      }
     } catch (error: any) {
       if (error?.code === 11000) {
         return {
@@ -100,7 +102,7 @@ export class RegularUserResolver {
 
   @Mutation(() => regularUserStatusResponse)
   async loginRegularUser(
-    @Ctx() { req, res }: MyContext,
+    @Ctx() { req, res }: any,
     @Arg("email", () => String) email: string,
     @Arg("password", () => String) password: string
   ): Promise<regularUserStatusResponse> {
@@ -144,9 +146,9 @@ export class RegularUserResolver {
 
   @Mutation(() => Boolean)
   @UseMiddleware(isCustomer)
-  async logout(@Ctx() { req, res }: MyContext): Promise<Boolean> {
+  async logout(@Ctx() { req, res }: any): Promise<Boolean> {
     return new Promise((resolve) => {
-      req.session.destroy((err) => {
+      req.session.destroy((err: any) => {
         res.clearCookie(process.env.COOKIENAME as string);
         if (err) {
           console.log(err);
@@ -158,7 +160,7 @@ export class RegularUserResolver {
   }
 
   @Query(() => RegularUser, { nullable: true })
-  async getUser(@Ctx() { req }: MyContext): Promise<RegularUser | null> {
+  async getUser(@Ctx() { req }: any): Promise<RegularUser | null> {
     if (!req.session.userId || !req.session.customer) {
       return null;
     }
@@ -205,7 +207,7 @@ export class RegularUserResolver {
   async forgotUserPassword(
     @Arg("newPassword", () => String) newPassword: string,
     @Arg("token", () => String) token: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<regularUserStatusResponse> {
     if (newPassword.length <= 2) {
       return {

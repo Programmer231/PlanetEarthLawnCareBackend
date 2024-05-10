@@ -37,6 +37,12 @@ class EstimateObjects {
   _id!: string;
 }
 
+@InputType()
+class JobInputs {
+  @Field(() => [String])
+  jobId!: string[];
+}
+
 @ObjectType()
 class Deletion {
   @Field(() => [ErrorResponse], { nullable: true })
@@ -77,15 +83,6 @@ class JobResponse {
 }
 
 @ObjectType()
-class CreateJobResponse {
-  @Field(() => Boolean, { nullable: true })
-  jobs?: Boolean;
-
-  @Field(() => [ErrorResponse], { nullable: true })
-  errors?: ErrorResponse[];
-}
-
-@ObjectType()
 class EstimateResponse {
   @Field(() => Boolean, { nullable: true })
   estimateSubmitted?: Boolean;
@@ -115,44 +112,15 @@ class RetrieveEstimate {
 @Resolver()
 export class EstimateResolver {
   @Query(() => JobResponse)
-  async getJobs(@Ctx() { req }: MyContext): Promise<JobResponse> {
+  async getJobs(@Ctx() { req }: any): Promise<JobResponse> {
     return { jobs: await datasource.manager.find(AvailableJobs) };
   }
 
-  @Mutation(() => CreateJobResponse)
-  @UseMiddleware(isAdmin)
-  async addJob(
-    @Arg("name", () => String) name: string,
-    @Ctx() { req }: MyContext
-  ): Promise<CreateJobResponse> {
-    const adminUser = await datasource.manager.findOneBy(AdminUser, {
-      _id: new ObjectId(req.session.userId),
-    } as any);
-
-    if (!adminUser) {
-      return {
-        errors: [
-          {
-            field: "authorization",
-            message: "not authorized",
-          },
-        ],
-      };
-    }
-
-    const job = new AvailableJobs();
-
-    job.name = name;
-
-    await datasource.manager.save(job);
-
-    return { jobs: true };
-  }
   @Mutation(() => EstimateResponse)
   @UseMiddleware(isAdmin)
   async createEstimate(
     @Arg("estimates", () => EstimateInput) estimates: EstimateInput,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<EstimateResponse> {
     const adminUser = await datasource.manager.findOneBy(AdminUser, {
       _id: new ObjectId(req.session.userId),
@@ -231,6 +199,8 @@ export class EstimateResolver {
       userEstimate.address = user?.address as string;
       userEstimate.totalCost = parseFloat(totalCost.toFixed(2));
 
+      userEstimate.checked = true;
+
       await datasource.manager.save(userEstimate);
     } catch (err: any) {
       console.log("unsuccessful");
@@ -245,7 +215,7 @@ export class EstimateResolver {
   async getJobsToEstimate(
     @Arg("jobId", () => String) jobId: string,
     @Arg("date", () => String) date: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<RetrieveEstimates> {
     const adminUser = await datasource.manager.findOneBy(AdminUser, {
       _id: new ObjectId(req.session.userId),
@@ -299,9 +269,7 @@ export class EstimateResolver {
 
   @Query(() => RetrieveEstimates)
   @UseMiddleware(isAdmin)
-  async getAllEstimatesQuery(
-    @Ctx() { req }: MyContext
-  ): Promise<RetrieveEstimates> {
+  async getAllEstimatesQuery(@Ctx() { req }: any): Promise<RetrieveEstimates> {
     try {
       const estimates = await datasource.manager.findBy(Estimates, {
         order: {
@@ -326,7 +294,7 @@ export class EstimateResolver {
   @UseMiddleware(isAdmin)
   async getAllEstimates(
     @Arg("date", () => String) date: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ) {
     const realDate = new Date(date);
 
@@ -363,7 +331,7 @@ export class EstimateResolver {
   async getUsersToEstimates(
     @Arg("date", () => String) date: string,
     @Arg("inputUserId", () => String) inputUserId: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ) {
     const realDate = new Date(date);
 
@@ -401,7 +369,7 @@ export class EstimateResolver {
   @UseMiddleware(isAdmin)
   async getSpecificEstimate(
     @Arg("estimateId", () => String) estimateId: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<RetrieveEstimate> {
     const specificEstimate = await datasource.manager.findOne(Estimates, {
       where: {
@@ -425,7 +393,7 @@ export class EstimateResolver {
   async updateSpecificEstimate(
     @Arg("estimates", () => EstimateInput) estimates: EstimateInput,
     @Arg("estimateId", () => String) estimateId: string,
-    @Ctx() { req }: MyContext
+    @Ctx() { req }: any
   ): Promise<EstimateResponse> {
     const estimate = await datasource.manager.findOne(Estimates, {
       where: { _id: new ObjectId(estimateId) } as any,
@@ -501,6 +469,8 @@ export class EstimateResolver {
       estimate.address = user?.address as string;
       estimate.totalCost = parseFloat(totalCost.toFixed(2));
 
+      estimate.checked = true;
+
       await datasource.manager.save(estimate);
     } catch (err: any) {
       console.log("unsuccessful");
@@ -512,34 +482,32 @@ export class EstimateResolver {
 
   @Mutation(() => Deletion)
   @UseMiddleware(isAdmin)
-  async deleteEstimate(
-    @Ctx() { req, res }: MyContext,
-    @Arg("id", () => String) id: string
-  ): Promise<Deletion> {
-    if (!req.session.userId) {
-      return {
-        errors: [
-          {
-            field: "authentication",
-            message: "User not authenticated",
-          },
-        ],
-      };
-    }
+  async deleteEstimate(@Arg("id", () => String) id: string): Promise<Deletion> {
+    const specificEstimate = await datasource.manager.findOne(Estimates, {
+      where: { _id: new ObjectId(id) },
+    });
+
     const estimate = await datasource.manager.delete(
       Estimates,
       new ObjectId(id)
     );
+
+    console.log(specificEstimate);
+
+    if (specificEstimate) {
+      for (let file of (specificEstimate as any).images) {
+        fs.unlink(path.join(__dirname, "../", file), (err) => {
+          console.log(err);
+        });
+      }
+    }
 
     return { success: true };
   }
 
   @Mutation(() => Deletion)
   @UseMiddleware(isAdmin)
-  async deleteJob(
-    @Ctx() { req, res }: MyContext,
-    @Arg("id", () => String) id: string
-  ): Promise<Deletion> {
+  async deleteJob(@Arg("id", () => String) id: string): Promise<Deletion> {
     const job = await datasource.manager.findOne(AvailableJobs, {
       where: { _id: new ObjectId(id) },
     });
@@ -553,5 +521,95 @@ export class EstimateResolver {
     }
 
     return { success: true };
+  }
+
+  @Mutation(() => EstimateResponse)
+  @UseMiddleware(isCustomer)
+  async createEstimateByUser(
+    @Arg("jobs", () => JobInputs) jobs: JobInputs,
+    @Ctx() { req }: any
+  ): Promise<EstimateResponse> {
+    const regularUser = await datasource.manager.findOneBy(RegularUser, {
+      _id: new ObjectId(req.session.userId),
+    } as any);
+
+    if (!regularUser) {
+      return {
+        errors: [
+          {
+            field: "authorization",
+            message: "not authorized",
+          },
+        ],
+      };
+    }
+
+    const userEstimate = new Estimates();
+    userEstimate.userId = new UserID();
+    userEstimate.userId._id = new ObjectId(req.session.userId);
+    userEstimate.jobs = [];
+
+    userEstimate.accepted = false;
+
+    try {
+      let totalCost = 0;
+      for (let x = 0; x < jobs.jobId.length; x++) {
+        let jobId = new ObjectId(jobs.jobId[x]);
+        let cost = 0;
+        let quantity = 0;
+
+        totalCost += cost * quantity;
+
+        const specificJob = await datasource.manager.findOne(AvailableJobs, {
+          where: { _id: jobId },
+        } as any);
+
+        if (!specificJob) {
+          return {
+            errors: [
+              {
+                field: "Error",
+                message: "Unkown Error Occurred",
+              },
+            ],
+          };
+        }
+
+        userEstimate.jobs.push({
+          _id: jobId,
+          cost: cost,
+          quantity: quantity,
+          name: specificJob.name as string,
+        });
+      }
+
+      userEstimate.name = regularUser?.name as string;
+
+      userEstimate.address = regularUser?.address as string;
+      userEstimate.totalCost = parseFloat(totalCost.toFixed(2));
+
+      userEstimate.checked = false;
+
+      await datasource.manager.save(userEstimate);
+    } catch (err: any) {
+      console.log("unsuccessful");
+      console.log(err);
+    }
+
+    return { estimateSubmitted: true };
+  }
+
+  @Query(() => RetrieveEstimates)
+  @UseMiddleware(isCustomer)
+  async getEstimatesSpecificUser(
+    @Ctx() { req }: any
+  ): Promise<RetrieveEstimates> {
+    const estimates = await datasource.manager.findBy(Estimates, {
+      where: {
+        "userId._id": new ObjectId(req.session.userId),
+      },
+    } as any);
+
+    return { estimates: estimates };
   }
 }

@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.validateRegister = void 0;
-const validateRegister = (email, password, username) => {
+const validateRegister = (email, username, password) => {
     if (!email.includes("@")) {
         return [{ field: "email", message: "invalid email" }];
     }
@@ -16,11 +16,11 @@ const validateRegister = (email, password, username) => {
             },
         ];
     }
-    if (password.length <= 3) {
+    if (password.length < 8) {
         return [
             {
                 field: "password",
-                message: "password not long enough",
+                message: "password not long enough. It must be at least 8 characters.",
             },
         ];
     }
